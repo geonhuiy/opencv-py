@@ -34,7 +34,7 @@ class SizeCheck:
         false_colors_area = false_colors.copy()
         for i, centroid in enumerate(centroids[1:], start=1):
             area = stats[i, 4]
-            cv2.putText(false_colors_area, str(area), (int(centroid[0]), int(centroid[1])), cv2.FONT_HERSHEY_SIMPLEX, 0.2, (255, 255, 255), 1)
+            cv2.putText(false_colors_area, str(area), (int(centroid[0]), int(centroid[1])), cv2.FONT_HERSHEY_SIMPLEX, 0.25, (255, 255, 255), 1)
 
         imgs = {'Original': img, 'Adapted-Gaussian': false_colors_area}
         #for i, (k, v) in enumerate(imgs.items()):

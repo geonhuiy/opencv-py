@@ -6,15 +6,17 @@ from sizeCheck import SizeCheck
 # For CLI arguments
 ap = argparse.ArgumentParser()
 # Filepath to image is necessary to run, colour is not implemented yet.
-ap.add_argument('-i', '--image', help='Path to image')
-ap.add_argument('-c', '--colour', help='Colour to detect')
+ap.add_argument('-i', '--image', help='Path to image', required=True, type=str)
+#ap.add_argument('-c', '--colour', help='Colour to detect')
+ap.add_argument('-m', '--caffemodel',
+                help='Path to HED caffemodel', required=True, type=str)
 args = vars(ap.parse_args())
 img = cv2.imread(args["image"])
 
 
 def main():
     # Opens the image from the given filepath in argument
-    #filterColour()
+    # filterColour()
     SizeCheck.checkLargest(img)
 
 
