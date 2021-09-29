@@ -26,7 +26,7 @@ def main():
     # SizeCheck.checkArea(img)
     #SizeCheck.watershed(img)
     # SizeCheck.hed(img)
-    SizeCheck.closing(img)
+    SizeCheck.auto_canny(img)
 
 
 class SizeCheck:
@@ -100,14 +100,13 @@ class SizeCheck:
         # return hed
 
     def watershed(img):
-        original = img
         #blurred_img = cv2.GaussianBlur(img, (5, 5), 0)
         # Pyramid shifting to improve accuracy
         shifted_img = cv2.pyrMeanShiftFiltering(img, 1, 1)
         gray = cv2.cvtColor(shifted_img, cv2.COLOR_BGR2GRAY)
         thresh = cv2.threshold(
             gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-
+        
         # Adjust min_distance for contour area sensitivity
         D = ndimage.distance_transform_edt(thresh)
         localmax = peak_local_max(
@@ -137,22 +136,38 @@ class SizeCheck:
             # cv2.putText(img, "#{}".format(label), (int(x) - 10, int(y)),
             #    cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 0, 255), 2)
             cv2.drawContours(img, [largestContour], -1, (36, 255, 12), 2)
-        cv2.imshow('Original', original)
         cv2.imshow('Area', img)
-        #cv2.imshow('Erode2', eroded2)
         cv2.waitKey()
         cv2.destroyAllWindows()
     
-    def canny(img):
+    def auto_canny(img, sigma=0.33):
+
         blockSize = 31
-        C = 11
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        edge = cv2.Canny(blur, 200, 250)
-        cv2.imshow('Closing operation', edge)
+        C = 3
+
+        #Median of single channel pixel of image
+        v = np.median(img)
+
+        #Automatic canny thresholds based on the median of the image
+        lower = int(max(0,(1.0 - sigma) * v))
+        upper = int(min(255,(1.0 + sigma) * v))
+
+        #Gray and blur to remove noise from image
+        grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(grey, (3, 3), 0)
+        thresh = cv2.threshold(
+            blur, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+        thresholdGaussian = cv2.adaptiveThreshold(
+            blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, blockSize, C)
+        edge = cv2.Canny(thresh, lower, upper)
+
+        contours = cv2.findContours(edge, 
+            cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        print("Number of Contours found = " + str(len(contours)))
+        cv2.imshow('Closing operation', img)
         cv2.waitKey()
         cv2.destroyAllWindows()
-
+    
 
 if __name__ == '__main__':
     main()
