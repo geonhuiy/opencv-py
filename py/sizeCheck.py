@@ -2,6 +2,11 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import argparse
+import imutils
+from numpy.core.numeric import count_nonzero
+from skimage.feature import peak_local_max
+from skimage.segmentation import watershed
+from scipy import ndimage
 from CropLayer import CropLayer
 import os
 
@@ -18,10 +23,10 @@ img = cv2.imread(args["image"])
 
 
 def main():
-    #SizeCheck.checkArea(SizeCheck.hed(img))
-    #SizeCheck.checkArea(img)
-    SizeCheck.watershed(img)
-
+    # SizeCheck.checkArea(img)
+    #SizeCheck.watershed(img)
+    # SizeCheck.hed(img)
+    SizeCheck.closing(img)
 
 
 class SizeCheck:
@@ -32,13 +37,16 @@ class SizeCheck:
 
         blur = cv2.GaussianBlur(img, (3, 3), 0)
         gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
-        thresholdMean = cv2.adaptiveThreshold(gray,255,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,blockSize, C)
+        thresholdMean = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, blockSize, C)
         thresholdGaussian = cv2.adaptiveThreshold(
             gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, blockSize, C)
-        thresholdOtsu = cv2.threshold(gray, 0,255,cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+        thresholdOtsu = cv2.threshold(
+            gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
 
         # Perform connected component labeling
-        n_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(thresholdMean , connectivity=4)
+        n_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+            thresholdMean, connectivity=4)
 
         # Create false color image and color background black
         colors = np.random.randint(0, 255, size=(n_labels, 3), dtype=np.uint8)
@@ -54,7 +62,8 @@ class SizeCheck:
         rgb_gaussian = cv2.cvtColor(thresholdGaussian, cv2.COLOR_BGR2RGB)
         rgb_otsu = cv2.cvtColor(thresholdOtsu, cv2.COLOR_BGR2RGB)
         rgb_mean = cv2.cvtColor(thresholdMean, cv2.COLOR_BGR2RGB)
-        imgs = {'Original': img, 'Adapted-Gaussian': rgb_gaussian, 'Otsu': rgb_mean, 'Colors': false_colors_area}
+        imgs = {'Original': img, 'Adapted-Gaussian': rgb_gaussian,
+                'Mean': rgb_mean, 'Colors': false_colors_area}
 
         for i, (k, v) in enumerate(imgs.items()):
             plt.subplot(2, 2, i+1)
@@ -64,8 +73,8 @@ class SizeCheck:
         plt.show()
         #cv2.imshow('Original sample', img)
         #cv2.imshow('Area', false_colors_area)
-        #cv2.waitKey()
-        #cv2.destroyAllWindows()
+        # cv2.waitKey()
+        # cv2.destroyAllWindows()
 
     def hed(img):
         protoPath = os.path.sep.join([args['hedPath'], 'deploy.prototxt'])
@@ -82,19 +91,65 @@ class SizeCheck:
 
         net.setInput(blob)
 
-        hed= net.forward()
-        hed= cv2.resize(hed[0,0], (W,H))
-        hed= (255 * hed).astype('uint8')
+        hed = net.forward()
+        hed = cv2.resize(hed[0, 0], (W, H))
+        hed = (255 * hed).astype('uint8')
+        cv2.imshow('HED', hed)
+        cv2.waitKey()
+        cv2.destroyAllWindows()
+        # return hed
 
-        return hed
-    
     def watershed(img):
-        #Pyramid shifting to improve accuracy
-        shifted_img = cv2.pyrMeanShiftFiltering(img, 21, 51)
-
+        original = img
+        #blurred_img = cv2.GaussianBlur(img, (5, 5), 0)
+        # Pyramid shifting to improve accuracy
+        shifted_img = cv2.pyrMeanShiftFiltering(img, 1, 1)
         gray = cv2.cvtColor(shifted_img, cv2.COLOR_BGR2GRAY)
-        thresh = cv2.threshold(gray, 0,255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-        cv2.imshow('Threshold', thresh)
+        thresh = cv2.threshold(
+            gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+
+        # Adjust min_distance for contour area sensitivity
+        D = ndimage.distance_transform_edt(thresh)
+        localmax = peak_local_max(
+            D, indices=False, min_distance=14, labels=thresh)
+
+        markers = ndimage.label(localmax, structure=np.ones((3, 3)))[0]
+        labels = watershed(-D, markers, mask=thresh)
+
+        for label in np.unique(labels):
+            # Lable 0 is background, ignored
+            if label == 0:
+                continue
+
+            # Allocate memory for label region and draw on mask
+            mask = np.zeros(gray.shape, dtype='uint8')
+            mask[labels == label] = 255
+
+            # Detect largest contour in the mask
+            contours = cv2.findContours(
+                mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            # contours = imutils.grab_contours(contours)z
+            contours = contours[0] if len(contours) == 2 else contours[1]
+            largestContour = max(contours, key=cv2.contourArea)
+            area = cv2.contourArea(largestContour)
+            print(area)
+
+            # cv2.putText(img, "#{}".format(label), (int(x) - 10, int(y)),
+            #    cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 0, 255), 2)
+            cv2.drawContours(img, [largestContour], -1, (36, 255, 12), 2)
+        cv2.imshow('Original', original)
+        cv2.imshow('Area', img)
+        #cv2.imshow('Erode2', eroded2)
+        cv2.waitKey()
+        cv2.destroyAllWindows()
+    
+    def canny(img):
+        blockSize = 31
+        C = 11
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        edge = cv2.Canny(blur, 200, 250)
+        cv2.imshow('Closing operation', edge)
         cv2.waitKey()
         cv2.destroyAllWindows()
 
