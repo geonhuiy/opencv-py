@@ -23,9 +23,10 @@ img = cv2.imread(args["image"])
 
 
 def main():
-    # SizeCheck.checkArea(SizeCheck.hed(img))
     # SizeCheck.checkArea(img)
-    SizeCheck.watershed(img)
+    #SizeCheck.watershed(img)
+    # SizeCheck.hed(img)
+    SizeCheck.closing(img)
 
 
 class SizeCheck:
@@ -62,7 +63,7 @@ class SizeCheck:
         rgb_otsu = cv2.cvtColor(thresholdOtsu, cv2.COLOR_BGR2RGB)
         rgb_mean = cv2.cvtColor(thresholdMean, cv2.COLOR_BGR2RGB)
         imgs = {'Original': img, 'Adapted-Gaussian': rgb_gaussian,
-                'Otsu': rgb_mean, 'Colors': false_colors_area}
+                'Mean': rgb_mean, 'Colors': false_colors_area}
 
         for i, (k, v) in enumerate(imgs.items()):
             plt.subplot(2, 2, i+1)
@@ -93,10 +94,13 @@ class SizeCheck:
         hed = net.forward()
         hed = cv2.resize(hed[0, 0], (W, H))
         hed = (255 * hed).astype('uint8')
-
-        return hed
+        cv2.imshow('HED', hed)
+        cv2.waitKey()
+        cv2.destroyAllWindows()
+        # return hed
 
     def watershed(img):
+        original = img
         #blurred_img = cv2.GaussianBlur(img, (5, 5), 0)
         # Pyramid shifting to improve accuracy
         shifted_img = cv2.pyrMeanShiftFiltering(img, 1, 1)
@@ -104,10 +108,10 @@ class SizeCheck:
         thresh = cv2.threshold(
             gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
 
-        #Adjust min_distance for contour area sensitivity
+        # Adjust min_distance for contour area sensitivity
         D = ndimage.distance_transform_edt(thresh)
         localmax = peak_local_max(
-            D, indices=False, min_distance=15, labels=thresh)
+            D, indices=False, min_distance=14, labels=thresh)
 
         markers = ndimage.label(localmax, structure=np.ones((3, 3)))[0]
         labels = watershed(-D, markers, mask=thresh)
@@ -133,10 +137,22 @@ class SizeCheck:
             # cv2.putText(img, "#{}".format(label), (int(x) - 10, int(y)),
             #    cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 0, 255), 2)
             cv2.drawContours(img, [largestContour], -1, (36, 255, 12), 2)
-        cv2.imshow('Erode1', img)
+        cv2.imshow('Original', original)
+        cv2.imshow('Area', img)
         #cv2.imshow('Erode2', eroded2)
         cv2.waitKey()
         cv2.destroyAllWindows()
+    
+    def canny(img):
+        blockSize = 31
+        C = 11
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        edge = cv2.Canny(blur, 200, 250)
+        cv2.imshow('Closing operation', edge)
+        cv2.waitKey()
+        cv2.destroyAllWindows()
+
 
 if __name__ == '__main__':
     main()
